@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Search Results</title>
+    <style>
+        body { font-family: monospace; margin: 20px; }
+        .track { margin-bottom: 40px; border: 1px solid #ccc; padding: 10px; }
+        .spotify { background: #e8f5e9; padding: 10px; margin-bottom: 10px; }
+        .search { margin: 10px 0; padding: 10px; background: #f5f5f5; }
+        .results { margin-left: 20px; }
+        .match { background: #c8e6c9; }
+        .no-match { background: #ffcdd2; }
+        .query { font-weight: bold; color: #1976d2; }
+        .result-item { margin: 5px 0; padding: 5px; background: white; }
+    </style>
+</head>
+<body>
+    <h1>Debug Apple Music Search Results</h1>
+    <p>Click the button to run debug search and see what Apple Music returns for each track.</p>
+    <button onclick="runDebug()">Run Debug Search</button>
+    <div id="results"></div>
+
+    <script>
+        async function runDebug() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = 'Loading...';
+            
+            try {
+                const response = await fetch('/api/debug-search');
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    resultsDiv.innerHTML = `<div class="no-match">Error: ${JSON.stringify(data)}</div>`;
+                    return;
+                }
+                
+                let html = `<h2>${data.playlist} - ${data.totalTracks} tracks</h2>`;
+                
+                data.debugResults.forEach((track, idx) => {
+                    const hasAnyResults = track.searches.some(s => s.resultCount > 0);
+                    
+                    html += `<div class="track ${hasAnyResults ? 'match' : 'no-match'}">`;
+                    html += `<h3>Track ${idx + 1}: ${track.spotify.name}</h3>`;
+                    html += `<div class="spotify">`;
+                    html += `<strong>Spotify:</strong><br>`;
+                    html += `Name: ${track.spotify.name}<br>`;
+                    html += `Artists: ${track.spotify.artists.join(', ')}<br>`;
+                    html += `Album: ${track.spotify.album}<br>`;
+                    html += `Duration: ${track.spotify.duration}s<br>`;
+                    html += `Release: ${track.spotify.releaseDate}`;
+                    html += `</div>`;
+                    
+                    track.searches.forEach((search, sidx) => {
+                        html += `<div class="search">`;
+                        html += `<div class="query">Search ${sidx + 1}: "${search.query}"</div>`;
+                        html += `<div>Results: ${search.resultCount || 0}</div>`;
+                        
+                        if (search.results && search.results.length > 0) {
+                            html += `<div class="results">`;
+                            search.results.slice(0, 3).forEach((result, ridx) => {
+                                const isGoodMatch = 
+                                    result.name.toLowerCase().includes(track.spotify.name.toLowerCase()) ||
+                                    track.spotify.name.toLowerCase().includes(result.name.toLowerCase());
+                                
+                                html += `<div class="result-item ${isGoodMatch ? 'match' : ''}">`;
+                                html += `${ridx + 1}. "${result.name}" by ${result.artist}<br>`;
+                                html += `   Album: ${result.album}<br>`;
+                                html += `   Duration: ${result.duration}s (diff: ${Math.abs(result.duration - track.spotify.duration)}s)<br>`;
+                                html += `   Release: ${result.releaseDate?.split('T')[0]}`;
+                                html += `</div>`;
+                            });
+                            html += `</div>`;
+                        }
+                        
+                        html += `</div>`;
+                    });
+                    
+                    html += `</div>`;
+                });
+                
+                resultsDiv.innerHTML = html;
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="no-match">Error: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>
