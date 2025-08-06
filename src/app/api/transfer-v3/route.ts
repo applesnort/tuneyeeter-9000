@@ -328,7 +328,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     console.log("Request body:", body);
-    const { playlistId } = body;
+    const { playlistId, batchSize = 5, batchOffset: batchOffset = 0 } = body;
     
     if (!playlistId) {
       console.error("No playlist ID provided");
@@ -402,7 +402,11 @@ export async function POST(request: NextRequest) {
     const overallStartTime = Date.now();
     let isrcMatchCount = 0;
 
-    for (const track of tracks) {
+    // Process only a batch of tracks to stay within 10-second Vercel Hobby limit
+    const trackBatch = tracks.slice(batchOffset, batchOffset + batchSize);
+    console.log(`Processing batch: tracks ${batchOffset + 1}-${Math.min(batchOffset + batchSize, tracks.length)} of ${tracks.length}`);
+
+    for (const track of trackBatch) {
       const searchResult = await searchAppleMusic(track);
       const appleMatches = searchResult.matches;
       
@@ -473,11 +477,18 @@ export async function POST(request: NextRequest) {
       timing: {
         overallDuration: Date.now() - overallStartTime,
         trackTimings: [],
-        totalApiCalls: tracks.length,
+        totalApiCalls: trackBatch.length,
       },
       metadata: {
         isrcMatchCount,
         usedMusicKit: !!process.env.APPLE_TEAM_ID,
+        batch: {
+          batchOffset,
+          batchSize,
+          processedInThisBatch: trackBatch.length,
+          remainingTracks: Math.max(0, tracks.length - (batchOffset + batchSize)),
+          isComplete: batchOffset + batchSize >= tracks.length,
+        }
       }
     };
 

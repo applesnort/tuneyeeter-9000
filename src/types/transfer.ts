@@ -76,5 +76,12 @@ export interface TransferResult {
   metadata?: {
     isrcMatchCount?: number;
     usedMusicKit?: boolean;
+    batch?: {
+      batchOffset: number;
+      batchSize: number;
+      processedInThisBatch: number;
+      remainingTracks: number;
+      isComplete: boolean;
+    };
   };
 }

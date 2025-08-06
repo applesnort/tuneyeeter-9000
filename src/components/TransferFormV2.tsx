@@ -9,7 +9,8 @@ import {
   AlertCircle, 
   CheckCircle2,
   Loader2,
-  Sparkles
+  Sparkles,
+  Timer
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -21,6 +22,12 @@ export function TransferFormV2() {
   const router = useRouter()
   const [playlistUrl, setPlaylistUrl] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [batchProgress, setBatchProgress] = useState<{
+    currentBatch: number
+    totalBatches: number
+    processedTracks: number
+    totalTracks: number
+  } | null>(null)
   const [stats, setStats] = useState<{
     totalTransfers: number
     successRate: number
@@ -54,31 +61,83 @@ export function TransferFormV2() {
     }
 
     setIsLoading(true)
+    setBatchProgress(null)
 
     try {
-      const response = await fetch("/api/transfer-v3", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.accessToken}`,
-        },
-        body: JSON.stringify({ playlistId }),
-      })
+      let allResults: any = null
+      let batchOffset = 0
+      const batchSize = 5
+      let isComplete = false
+      let totalTracks = 0
+      let processedTracks = 0
+      let currentBatch = 1
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || "Transfer failed")
+      // Process in batches to avoid timeout
+      while (!isComplete) {
+        const response = await fetch("/api/transfer-v3", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session.accessToken}`,
+          },
+          body: JSON.stringify({ 
+            playlistId, 
+            batchSize, 
+            batchOffset 
+          }),
+        })
+
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || "Transfer failed")
+        }
+
+        const batchResult = await response.json()
+        
+        // Initialize totals from first batch
+        if (!allResults) {
+          totalTracks = batchResult.totalTracks
+          allResults = {
+            ...batchResult,
+            successful: [],
+            failures: []
+          }
+        }
+        
+        // Combine results from all batches
+        allResults.successful.push(...batchResult.successful)
+        allResults.failures.push(...batchResult.failures)
+        allResults.successfulTransfers += batchResult.successfulTransfers
+        
+        // Update progress
+        processedTracks += batchResult.metadata?.batch?.processedInThisBatch || 0
+        const totalBatches = Math.ceil(totalTracks / batchSize)
+        
+        setBatchProgress({
+          currentBatch,
+          totalBatches,
+          processedTracks,
+          totalTracks
+        })
+        
+        // Check if we're done
+        isComplete = batchResult.metadata?.batch?.isComplete || false
+        batchOffset += batchSize
+        currentBatch++
+        
+        // Small delay between batches to avoid overwhelming the API
+        if (!isComplete) {
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        }
       }
-
-      const result = await response.json()
       
-      // Save result to localStorage for review page
-      localStorage.setItem("latestTransferResult", JSON.stringify(result))
+      // Save final combined result to localStorage for review page
+      localStorage.setItem("latestTransferResult", JSON.stringify(allResults))
       
       // Update stats
       const newStats = {
         totalTransfers: (stats?.totalTransfers || 0) + 1,
-        successRate: Math.round((result.successfulTransfers / result.totalTracks) * 100)
+        successRate: Math.round((allResults.successfulTransfers / allResults.totalTracks) * 100)
       }
       setStats(newStats)
       localStorage.setItem("transferStats", JSON.stringify(newStats))
@@ -90,6 +149,7 @@ export function TransferFormV2() {
       toast.error(error instanceof Error ? error.message : "Transfer failed")
     } finally {
       setIsLoading(false)
+      setBatchProgress(null)
     }
   }
 
@@ -198,6 +258,33 @@ export function TransferFormV2() {
                     </div>
                   </div>
 
+                  {batchProgress && (
+                    <div className="bg-muted/50 rounded-lg p-4 mb-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <Timer className="h-5 w-5 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium text-sm">
+                            Processing Batch {batchProgress.currentBatch} of {batchProgress.totalBatches}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {batchProgress.processedTracks} of {batchProgress.totalTracks} tracks processed
+                          </p>
+                        </div>
+                      </div>
+                      <div className="w-full bg-secondary rounded-full h-2">
+                        <div 
+                          className="bg-primary h-2 rounded-full transition-all duration-300"
+                          style={{ 
+                            width: `${(batchProgress.processedTracks / batchProgress.totalTracks) * 100}%` 
+                          }}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {Math.round((batchProgress.processedTracks / batchProgress.totalTracks) * 100)}% complete
+                      </p>
+                    </div>
+                  )}
+
                   <Button
                     type="submit"
                     disabled={isLoading}
@@ -207,7 +294,7 @@ export function TransferFormV2() {
                     {isLoading ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Analyzing playlist...
+                        {batchProgress ? 'Processing batches...' : 'Analyzing playlist...'}
                       </>
                     ) : (
                       <>
