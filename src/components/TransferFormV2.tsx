@@ -143,8 +143,17 @@ export function TransferFormV2() {
       setStats(newStats)
       localStorage.setItem("transferStats", JSON.stringify(newStats))
       
-      // Navigate to review page
-      router.push("/transfer-review")
+      // Check if review is needed (tracks with potential matches to review)
+      const needsReview = allResults.failures.some(f => f.possibleMatches && f.possibleMatches.length > 0)
+      
+      if (needsReview) {
+        // Navigate to review page for manual matching
+        router.push("/transfer-review")
+      } else {
+        // All tracks were auto-matched or have no matches - go directly to import
+        localStorage.setItem("selectedMatches", JSON.stringify({})) // No manual selections
+        router.push("/transfer-import")
+      }
     } catch (error) {
       console.error("Transfer error:", error)
       toast.error(error instanceof Error ? error.message : "Transfer failed")

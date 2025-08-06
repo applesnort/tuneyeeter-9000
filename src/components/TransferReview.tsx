@@ -64,12 +64,15 @@ export function TransferReview({ result, onComplete }: TransferReviewProps) {
     const matchedCount = Object.keys(selectedMatches).length;
     const skippedCount = Object.keys(skippedTracks).length;
     
-    if (matchedCount === 0 && skippedCount === 0) {
+    // Allow completion if no tracks to review (all auto-matched)
+    if (matchedCount === 0 && skippedCount === 0 && tracksToReview.length > 0) {
       toast.error('Please select matches or skip tracks before completing');
       return;
     }
     
-    if (matchedCount > 0) {
+    if (tracksToReview.length === 0) {
+      toast.success('All tracks were automatically matched!');
+    } else if (matchedCount > 0) {
       toast.success(`Selected ${matchedCount} matches for import`);
     } else {
       toast.success('Review completed - all tracks skipped');
@@ -80,9 +83,10 @@ export function TransferReview({ result, onComplete }: TransferReviewProps) {
   const progress = ((currentIndex + 1) / tracksToReview.length) * 100;
   const matchedCount = Object.keys(selectedMatches).length;
   const skippedCount = Object.keys(skippedTracks).length;
-  const canComplete = matchedCount > 0 || skippedCount > 0;
+  const canComplete = matchedCount > 0 || skippedCount > 0 || tracksToReview.length === 0;
   
   if (!currentFailure) {
+    // No current failure means we're done reviewing
     return (
       <div className="max-w-4xl mx-auto p-6">
         <Card>
@@ -90,7 +94,10 @@ export function TransferReview({ result, onComplete }: TransferReviewProps) {
             <Check className="w-16 h-16 text-green-500 mx-auto mb-4" />
             <h2 className="text-2xl font-bold mb-4">Review Complete!</h2>
             <p className="text-muted-foreground mb-6">
-              You've reviewed all {tracksToReview.length} unmatched tracks and selected {matchedCount} matches.
+              {tracksToReview.length > 0 
+                ? `You've reviewed all ${tracksToReview.length} unmatched tracks and selected ${matchedCount} matches.`
+                : "All tracks were automatically matched! No manual review needed."
+              }
             </p>
             <Button onClick={handleComplete}>
               Continue to Import
