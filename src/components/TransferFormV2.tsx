@@ -144,7 +144,7 @@ export function TransferFormV2() {
       localStorage.setItem("transferStats", JSON.stringify(newStats))
       
       // Check if review is needed (tracks with potential matches to review)
-      const needsReview = allResults.failures.some(f => f.possibleMatches && f.possibleMatches.length > 0)
+      const needsReview = allResults.failures.some((f: any) => f.possibleMatches && f.possibleMatches.length > 0)
       
       if (needsReview) {
         // Navigate to review page for manual matching

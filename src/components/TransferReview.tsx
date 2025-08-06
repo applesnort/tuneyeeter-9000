@@ -43,7 +43,9 @@ export function TransferReview({ result, onComplete }: TransferReviewProps) {
     // Mark current track as explicitly skipped
     const currentFailure = tracksToReview[currentIndex];
     const newSkipped = { ...skippedTracks };
-    newSkipped[currentFailure.spotifyTrack.id] = true;
+    if (currentFailure.spotifyTrack.id) {
+      newSkipped[currentFailure.spotifyTrack.id] = true;
+    }
     setSkippedTracks(newSkipped);
     
     if (currentIndex < tracksToReview.length - 1) {

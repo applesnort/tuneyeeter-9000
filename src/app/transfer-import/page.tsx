@@ -95,7 +95,7 @@ export default function TransferImportPage() {
       }
     } catch (error) {
       console.error('Failed to initialize MusicKit:', error)
-      toast.error(`Failed to initialize Apple Music: ${error.message}`)
+      toast.error(`Failed to initialize Apple Music: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
@@ -112,7 +112,7 @@ export default function TransferImportPage() {
       toast.success('Authorized with Apple Music!')
     } catch (error) {
       console.error('MusicKit authorization failed:', error)
-      toast.error(`Failed to authorize: ${error.message || 'Unknown error'}`)
+      toast.error(`Failed to authorize: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
