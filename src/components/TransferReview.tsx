@@ -15,6 +15,7 @@ interface TransferReviewProps {
 
 export function TransferReview({ result, onComplete }: TransferReviewProps) {
   const [selectedMatches, setSelectedMatches] = useState<Record<string, string>>({});
+  const [skippedTracks, setSkippedTracks] = useState<Record<string, boolean>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [reviewMode, setReviewMode] = useState<'all' | 'unmatched'>('unmatched');
   
@@ -39,8 +40,17 @@ export function TransferReview({ result, onComplete }: TransferReviewProps) {
   };
   
   const skipTrack = () => {
+    // Mark current track as explicitly skipped
+    const currentFailure = tracksToReview[currentIndex];
+    const newSkipped = { ...skippedTracks };
+    newSkipped[currentFailure.spotifyTrack.id] = true;
+    setSkippedTracks(newSkipped);
+    
     if (currentIndex < tracksToReview.length - 1) {
       setCurrentIndex(currentIndex + 1);
+    } else {
+      // If this was the last track, enable completion
+      toast.success("Track skipped. You can now complete the review.");
     }
   };
   
@@ -52,17 +62,25 @@ export function TransferReview({ result, onComplete }: TransferReviewProps) {
   
   const handleComplete = () => {
     const matchedCount = Object.keys(selectedMatches).length;
-    if (matchedCount === 0) {
-      toast.error('Please select at least one match before completing');
+    const skippedCount = Object.keys(skippedTracks).length;
+    
+    if (matchedCount === 0 && skippedCount === 0) {
+      toast.error('Please select matches or skip tracks before completing');
       return;
     }
     
-    toast.success(`Selected ${matchedCount} matches`);
+    if (matchedCount > 0) {
+      toast.success(`Selected ${matchedCount} matches for import`);
+    } else {
+      toast.success('Review completed - all tracks skipped');
+    }
     onComplete(selectedMatches);
   };
   
   const progress = ((currentIndex + 1) / tracksToReview.length) * 100;
   const matchedCount = Object.keys(selectedMatches).length;
+  const skippedCount = Object.keys(skippedTracks).length;
+  const canComplete = matchedCount > 0 || skippedCount > 0;
   
   if (!currentFailure) {
     return (
@@ -258,9 +276,9 @@ export function TransferReview({ result, onComplete }: TransferReviewProps) {
           {currentIndex === tracksToReview.length - 1 && (
             <Button
               onClick={handleComplete}
-              disabled={matchedCount === 0}
+              disabled={!canComplete}
             >
-              Complete Review ({matchedCount} selected)
+              Complete Review ({matchedCount} selected, {skippedCount} skipped)
             </Button>
           )}
         </div>
