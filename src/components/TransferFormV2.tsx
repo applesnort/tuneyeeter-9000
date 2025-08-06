@@ -66,7 +66,7 @@ export function TransferFormV2() {
     try {
       let allResults: any = null
       let batchOffset = 0
-      const batchSize = 5
+      const batchSize = 3  // Reduced from 5 to 3 for more conservative timeout handling
       let isComplete = false
       let totalTracks = 0
       let processedTracks = 0
@@ -74,22 +74,51 @@ export function TransferFormV2() {
 
       // Process in batches to avoid timeout
       while (!isComplete) {
-        const response = await fetch("/api/transfer-v3", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${session.accessToken}`,
-          },
-          body: JSON.stringify({ 
-            playlistId, 
-            batchSize, 
-            batchOffset 
-          }),
-        })
+        console.log(`Starting batch ${currentBatch}, offset ${batchOffset}, size ${batchSize}`)
+        
+        // Create a timeout controller for the fetch request
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 9000) // 9 second timeout
+        
+        try {
+          const response = await fetch("/api/transfer-v3", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${session.accessToken}`,
+            },
+            body: JSON.stringify({ 
+              playlistId, 
+              batchSize, 
+              batchOffset 
+            }),
+            signal: controller.signal
+          })
+          
+          clearTimeout(timeoutId)
 
-        if (!response.ok) {
-          const error = await response.json()
-          throw new Error(error.error || "Transfer failed")
+          if (!response.ok) {
+            let errorMessage = "Transfer failed"
+            
+            if (response.status === 504) {
+              errorMessage = "Request timed out. Try reducing batch size or check your internet connection."
+            } else {
+              try {
+                const error = await response.json()
+                errorMessage = error.error || errorMessage
+              } catch {
+                // If response isn't JSON (like HTML error page), use generic message
+                errorMessage = `Server error (${response.status}). Please try again.`
+              }
+            }
+            throw new Error(errorMessage)
+          }
+        } catch (error) {
+          clearTimeout(timeoutId)
+          if (error.name === 'AbortError') {
+            throw new Error('Request timed out after 9 seconds. The server might be overloaded.')
+          }
+          throw error
         }
 
         const batchResult = await response.json()
