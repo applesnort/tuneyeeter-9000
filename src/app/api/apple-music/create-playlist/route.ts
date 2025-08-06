@@ -79,7 +79,12 @@ export async function POST(request: NextRequest) {
     console.log("Creating playlist with data:", {
       name: playlistData.attributes.name,
       trackCount: playlistData.relationships.tracks.data.length,
-      sampleTracks: playlistData.relationships.tracks.data.slice(0, 3)
+      sampleTracks: playlistData.relationships.tracks.data.slice(0, 3),
+      trackIdTypes: playlistData.relationships.tracks.data.slice(0, 3).map(track => ({
+        id: track.id,
+        isNumeric: /^\d+$/.test(track.id),
+        startsWithLetter: /^[a-zA-Z]/.test(track.id)
+      }))
     });
     
     // Create playlist
@@ -122,6 +127,23 @@ export async function POST(request: NextRequest) {
 
     const responseData = await createPlaylistResponse.json();
     console.log("Playlist created successfully:", JSON.stringify(responseData, null, 2));
+    
+    // Check if tracks were actually added
+    const actualTrackCount = responseData.data?.[0]?.attributes?.trackCount || 0;
+    const expectedTrackCount = trackIds.length;
+    
+    console.log("Track count verification:", {
+      expected: expectedTrackCount,
+      actual: actualTrackCount,
+      allTracksAdded: actualTrackCount === expectedTrackCount
+    });
+    
+    if (actualTrackCount === 0) {
+      console.warn("⚠️ Playlist created but no tracks were added! This usually means:");
+      console.warn("  1. Track IDs are in wrong format (iTunes vs MusicKit)");
+      console.warn("  2. Tracks are not available in user's region");
+      console.warn("  3. User doesn't have Apple Music subscription");
+    }
     
     const playlistId = responseData.data?.[0]?.id || "unknown";
     const playlistType = responseData.data?.[0]?.type || "unknown";
