@@ -107,7 +107,8 @@ export function TransferFormV2() {
         // Combine results from all batches
         allResults.successful.push(...batchResult.successful)
         allResults.failures.push(...batchResult.failures)
-        allResults.successfulTransfers += batchResult.successfulTransfers
+        // Don't accumulate - recalculate from actual successful array length
+        allResults.successfulTransfers = allResults.successful.length
         
         // Update progress
         processedTracks += batchResult.metadata?.batch?.processedInThisBatch || 0

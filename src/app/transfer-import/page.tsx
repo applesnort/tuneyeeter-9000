@@ -25,6 +25,7 @@ export default function TransferImportPage() {
   const [webUrl, setWebUrl] = useState<string | null>(null)
   const [playlistId, setPlaylistId] = useState<string | null>(null)
   const [playlistName, setPlaylistName] = useState("")
+  const [showAllTracks, setShowAllTracks] = useState(false)
 
   useEffect(() => {
     // Load transfer result and selected matches
@@ -197,13 +198,34 @@ export default function TransferImportPage() {
     )
   }
 
-  const totalTracksToImport = transferResult.successfulTransfers + Object.keys(selectedMatches).length
+  // Calculate properly: successful auto-matches + manual selections = total imports
+  const successfulAutoMatches = transferResult.successfulTransfers
+  const manualSelections = Object.keys(selectedMatches).length
+  const totalTracksToImport = successfulAutoMatches + manualSelections
+  
+  // Failed tracks are those that have no match selected (either auto or manual)
   const failedTracks = transferResult.failures.filter(f => {
     // If track has no ID, it can't be matched
     if (!f.spotifyTrack.id) return true
-    // If it's not in selectedMatches, it failed
+    // If it's not in selectedMatches, it's truly failed/skipped
     return !selectedMatches[f.spotifyTrack.id]
   }).length
+  
+  // Debug the actual data to understand the structure
+  console.log('DEBUGGING TRANSFER RESULT:', {
+    totalTracks: transferResult.totalTracks,
+    successfulTransfers: transferResult.successfulTransfers,
+    successfulArray: transferResult.successful?.length,
+    failuresArray: transferResult.failures?.length,
+    selectedMatchesCount: Object.keys(selectedMatches).length,
+    calculation: {
+      successfulAutoMatches,
+      manualSelections,
+      totalTracksToImport,
+      failedTracks
+    },
+    mathCheck: `${successfulAutoMatches} + ${transferResult.failures.length} = ${successfulAutoMatches + transferResult.failures.length} (should equal ${transferResult.totalTracks})`
+  })
 
   return (
     <div className="min-h-[calc(100vh-4rem)]">
@@ -299,15 +321,16 @@ export default function TransferImportPage() {
                     <div className="grid grid-cols-3 gap-4 text-center">
                       <div>
                         <div className="text-2xl font-bold text-green-600 dark:text-green-400">{totalTracksToImport}</div>
-                        <div className="text-xs text-muted-foreground">Imported</div>
-                      </div>
-                      <div>
-                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{Object.keys(selectedMatches).length}</div>
-                        <div className="text-xs text-muted-foreground">Manual Picks</div>
+                        <div className="text-xs text-muted-foreground">Ready to Import</div>
+                        <div className="text-xs text-gray-500">({successfulAutoMatches} auto + {manualSelections} manual)</div>
                       </div>
                       <div>
                         <div className="text-2xl font-bold text-red-600 dark:text-red-400">{failedTracks}</div>
-                        <div className="text-xs text-muted-foreground">Skipped</div>
+                        <div className="text-xs text-muted-foreground">Cannot Import</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold">{transferResult.totalTracks}</div>
+                        <div className="text-xs text-muted-foreground">Total Tracks</div>
                       </div>
                     </div>
                   </div>
@@ -317,7 +340,7 @@ export default function TransferImportPage() {
                     <h4 className="font-medium mb-3">Track Summary</h4>
                     <div className="space-y-3">
                       {/* Successful transfers */}
-                      {transferResult.successful.slice(0, 3).map((transfer, idx) => (
+                      {transferResult.successful.slice(0, showAllTracks ? undefined : 3).map((transfer, idx) => (
                         <div key={idx} className="flex items-center gap-3 text-sm">
                           {transfer.appleTrack.artworkUrl && (
                             <img 
@@ -335,7 +358,7 @@ export default function TransferImportPage() {
                       ))}
                       
                       {/* Manual selections */}
-                      {Object.entries(selectedMatches).slice(0, 2).map(([spotifyId, appleId]) => {
+                      {Object.entries(selectedMatches).slice(0, showAllTracks ? undefined : 2).map(([spotifyId, appleId]) => {
                         const failure = transferResult.failures.find(f => f.spotifyTrack.id === spotifyId)
                         const selectedTrack = failure?.possibleMatches?.find(m => m.id === appleId)
                         if (!failure || !selectedTrack) return null
@@ -361,11 +384,22 @@ export default function TransferImportPage() {
                         )
                       })}
                       
-                      {/* Show more indicator */}
-                      {(transferResult.successful.length + Object.keys(selectedMatches).length) > 5 && (
-                        <div className="text-center py-2 text-sm text-muted-foreground">
-                          + {totalTracksToImport - 5} more tracks imported
-                        </div>
+                      {/* Show more/less toggle */}
+                      {(transferResult.successful.length + manualSelections) > 5 && !showAllTracks && (
+                        <button 
+                          onClick={() => setShowAllTracks(true)}
+                          className="w-full text-center py-2 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                        >
+                          + Show all {totalTracksToImport} imported tracks
+                        </button>
+                      )}
+                      {showAllTracks && (transferResult.successful.length + manualSelections) > 5 && (
+                        <button 
+                          onClick={() => setShowAllTracks(false)}
+                          className="w-full text-center py-2 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                        >
+                          - Show less
+                        </button>
                       )}
                     </div>
                   </div>
