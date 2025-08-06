@@ -59,7 +59,7 @@ const handler = NextAuth({
           ...token,
           accessToken: account.access_token,
           refreshToken: account.refresh_token,
-          accessTokenExpires: Date.now() + (account.expires_in ?? 3600) * 1000,
+          accessTokenExpires: Date.now() + Number(account.expires_in ?? 3600) * 1000,
           user,
         }
       }

@@ -16,7 +16,9 @@
       "WebFetch(domain:developer.apple.com)",
       "WebFetch(domain:js-cdn.music.apple.com)",
       "Bash(pnpm dlx:*)",
-      "WebFetch(domain:developer.spotify.com)"
+      "WebFetch(domain:developer.spotify.com)",
+      "WebFetch(domain:orpc.unnoq.com)",
+      "Bash(pnpm build:*)"
     ],
     "deny": []
   }

@@ -33,7 +33,7 @@ export async function GET() {
       diagnostics.token.decoded = jwt.decode(token, { complete: true });
     }
   } catch (error) {
-    diagnostics.token.error = error.message;
+    diagnostics.token.error = error instanceof Error ? error.message : String(error);
   }
 
   return NextResponse.json(diagnostics, { 

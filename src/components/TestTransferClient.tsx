@@ -41,7 +41,7 @@ export function TestTransferClient({ session }: TestTransferClientProps) {
       const playlistId = playlistUrl.split("/playlist/")[1].split("?")[0];
       
       setLogs(prev => [...prev, "Starting transfer..."]);
-      setLogs(prev => [...prev, `Using access token: ${session.accessToken.substring(0, 10)}...`]);
+      setLogs(prev => [...prev, `Using authenticated session for transfer`]);
       
       const endpoint = useV2Algorithm ? "/api/transfer-v3" : "/api/transfer";
       setLogs(prev => [...prev, `Using ${useV2Algorithm ? 'V3 (MusicKit + research-based)' : 'V1 (simple)'} algorithm`]);

@@ -18,10 +18,7 @@ export async function GET() {
     const teamId = process.env.APPLE_TEAM_ID;
     const keyId = process.env.APPLE_KEY_ID;
     
-    console.log("Generating MusicKit token with:");
-    console.log("- Team ID:", teamId);
-    console.log("- Key ID:", keyId);
-    console.log("- Private key length:", privateKey.length);
+    console.log("Generating MusicKit token...");
     
     const token = jwt.sign({}, privateKey, {
       algorithm: 'ES256',
@@ -33,13 +30,13 @@ export async function GET() {
       }
     });
     
-    console.log("Generated token length:", token.length);
+    console.log("MusicKit token generated successfully");
     
     return NextResponse.json({ token });
   } catch (error) {
     console.error("Failed to generate MusicKit token:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to generate token" },
+      { error: error instanceof Error ? error.message : "Failed to generate token" },
       { status: 500 }
     );
   }

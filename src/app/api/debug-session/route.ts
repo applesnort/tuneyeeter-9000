@@ -5,7 +5,7 @@ import { getCustomSession } from "@/lib/auth-utils";
 export async function GET(request: NextRequest) {
   try {
     // Check cookies
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const sessionCookie = cookieStore.get("session-token");
     
     // Try to get session
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
       hasSession: !!session,
       sessionData: session ? {
         hasAccessToken: !!session.accessToken,
-        tokenPreview: session.accessToken ? session.accessToken.substring(0, 20) + "..." : null,
+        hasToken: !!session.accessToken,
         expiresAt: session.expiresAt,
       } : null,
       timestamp: new Date().toISOString(),
