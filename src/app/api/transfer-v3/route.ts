@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import SpotifyWebApi from "spotify-web-api-node";
 import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { matchTracks } from "@/lib/track-matching-algorithm";
 import { searchMusicKitByMetadata } from "@/lib/musickit-search";
 import { searchMusicKitAlbum, searchMusicKitArtist, getMusicKitArtistAlbums, getMusicKitAlbumTracks } from "@/lib/musickit-album-search";
@@ -311,7 +312,7 @@ export async function POST(request: NextRequest) {
   console.log("Transfer v3 endpoint called");
   
   try {
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     if (!session) {
       console.error("No session found");
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });

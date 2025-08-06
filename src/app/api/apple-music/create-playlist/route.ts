@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import jwt from "jsonwebtoken";
 
 const requestSchema = z.object({
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
   try {
     console.log("Create playlist endpoint called");
     
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     if (!session) {
       console.log("No session found");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
