@@ -41,8 +41,18 @@ export function TransferFormV2() {
     }
   }, [])
 
-  const extractPlaylistId = (url: string): string | null => {
-    const match = url.match(/playlist\/([a-zA-Z0-9]+)/)
+  const extractPlaylistId = (input: string): string | null => {
+    // Normalize the input by trimming whitespace
+    const trimmed = input.trim()
+    
+    // If it's already just a playlist ID (alphanumeric string)
+    if (/^[a-zA-Z0-9]+$/.test(trimmed)) {
+      return trimmed
+    }
+    
+    // Extract ID from various URL formats
+    // Handle: https://open.spotify.com/playlist/ID?si=... or just /playlist/ID
+    const match = trimmed.match(/playlist\/([a-zA-Z0-9]+)/)
     return match ? match[1] : null
   }
 
@@ -56,7 +66,7 @@ export function TransferFormV2() {
 
     const playlistId = extractPlaylistId(playlistUrl)
     if (!playlistId) {
-      toast.error("Please enter a valid Spotify playlist URL")
+      toast.error("Please enter a valid Spotify playlist URL or playlist ID")
       return
     }
 
@@ -80,6 +90,7 @@ export function TransferFormV2() {
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), 9000) // 9 second timeout
         
+        let batchResult
         try {
           const response = await fetch("/api/transfer-v3", {
             method: "POST",
@@ -113,6 +124,8 @@ export function TransferFormV2() {
             }
             throw new Error(errorMessage)
           }
+          
+          batchResult = await response.json()
         } catch (error) {
           clearTimeout(timeoutId)
           if (error.name === 'AbortError') {
@@ -120,8 +133,6 @@ export function TransferFormV2() {
           }
           throw error
         }
-
-        const batchResult = await response.json()
         
         // Initialize totals from first batch
         if (!allResults) {
@@ -242,14 +253,14 @@ export function TransferFormV2() {
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div>
                     <label htmlFor="playlist" className="block text-sm font-medium mb-2">
-                      Spotify Playlist URL
+                      Spotify Playlist URL or ID
                     </label>
                     <input
-                      type="url"
+                      type="text"
                       id="playlist"
                       value={playlistUrl}
                       onChange={(e) => setPlaylistUrl(e.target.value)}
-                      placeholder="https://open.spotify.com/playlist/..."
+                      placeholder="https://open.spotify.com/playlist/... or just playlist ID"
                       className="w-full rounded-lg border border-input bg-background px-4 py-3 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       required
                       disabled={isLoading}
