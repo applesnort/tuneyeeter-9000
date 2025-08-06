@@ -126,18 +126,48 @@ export default function TransferImportPage() {
       const music = window.MusicKit.getInstance()
       const userToken = music.musicUserToken
       
-      // Collect all tracks to import
+      // Collect all tracks to import - filter for MusicKit-compatible IDs only
       const tracksToImport: string[] = []
+      const incompatibleTracks: string[] = []
       
-      // Add successful transfers
+      // Helper function to check if ID is valid for Apple Music library operations
+      const isAppleMusicCompatible = (id: string) => {
+        // Both iTunes Search API and MusicKit Catalog API return numeric IDs
+        // These should work for library playlist operations
+        return id && id.length > 0 && /^\d+$/.test(id)
+      }
+      
+      // Add successful transfers 
       transferResult.successful.forEach(transfer => {
-        tracksToImport.push(transfer.appleTrack.id)
+        if (isAppleMusicCompatible(transfer.appleTrack.id)) {
+          tracksToImport.push(transfer.appleTrack.id)
+        } else {
+          incompatibleTracks.push(transfer.appleTrack.id)
+          console.warn(`Skipping invalid ID: ${transfer.appleTrack.id} for track: ${transfer.spotifyTrack.name}`)
+        }
       })
       
       // Add manually selected matches
       Object.values(selectedMatches).forEach(appleTrackId => {
-        tracksToImport.push(appleTrackId)
+        if (isAppleMusicCompatible(appleTrackId)) {
+          tracksToImport.push(appleTrackId)
+        } else {
+          incompatibleTracks.push(appleTrackId)
+          console.warn(`Skipping invalid ID: ${appleTrackId}`)
+        }
       })
+      
+      console.log('Track ID filtering results:', {
+        totalTracks: transferResult.successful.length + Object.keys(selectedMatches).length,
+        compatibleIds: tracksToImport.length,
+        incompatibleIds: incompatibleTracks.length,
+        sampleCompatibleIds: tracksToImport.slice(0, 3),
+        sampleIncompatibleIds: incompatibleTracks.slice(0, 3)
+      })
+      
+      if (tracksToImport.length === 0) {
+        throw new Error('No tracks available to import. Please try a different playlist or check your track selections.')
+      }
       
       // Create playlist on Apple Music
       console.log('Creating playlist with:', {
@@ -333,6 +363,15 @@ export default function TransferImportPage() {
                         <div className="text-xs text-muted-foreground">Total Tracks</div>
                       </div>
                     </div>
+                    
+                    {/* Show compatibility warning if needed */}
+                    {transferResult.metadata?.usedMusicKit === false && (
+                      <div className="mt-4 p-3 bg-yellow-500/10 dark:bg-yellow-500/20 border border-yellow-500/20 rounded-lg">
+                        <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                          ⚠️ Using iTunes Search API - some tracks may not be importable to Apple Music library
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Track Visual Summary */}
