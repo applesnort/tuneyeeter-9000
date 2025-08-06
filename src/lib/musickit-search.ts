@@ -35,7 +35,11 @@ export async function searchMusicKitByISRC(isrc: string): Promise<AppleTrack[]> 
     });
 
     if (!response.ok) {
-      console.error(`MusicKit API error: ${response.status}`);
+      if (response.status === 401) {
+        console.log(`MusicKit API unavailable (401) - using iTunes Search API fallback`);
+      } else {
+        console.error(`MusicKit API error: ${response.status}`);
+      }
       return [];
     }
 
@@ -88,7 +92,11 @@ export async function searchMusicKitByMetadata(track: SpotifyTrack): Promise<App
     });
 
     if (!response.ok) {
-      console.error(`MusicKit API error: ${response.status}`);
+      if (response.status === 401) {
+        console.log(`MusicKit API unavailable (401) - using iTunes Search API fallback`);
+      } else {
+        console.error(`MusicKit API error: ${response.status}`);
+      }
       return [];
     }
 

@@ -48,7 +48,11 @@ export async function searchMusicKitAlbum(artistName: string, albumName: string)
     });
 
     if (!response.ok) {
-      console.error(`MusicKit album search error: ${response.status}`);
+      if (response.status === 401) {
+        console.log(`MusicKit album search unavailable (401) - skipping to ISRC/iTunes search`);
+      } else {
+        console.error(`MusicKit album search error: ${response.status}`);
+      }
       return null;
     }
 
@@ -98,7 +102,11 @@ export async function searchMusicKitArtist(artistName: string): Promise<MusicKit
     });
 
     if (!response.ok) {
-      console.error(`MusicKit artist search error: ${response.status}`);
+      if (response.status === 401) {
+        console.log(`MusicKit artist search unavailable (401) - skipping to ISRC/iTunes search`);
+      } else {
+        console.error(`MusicKit artist search error: ${response.status}`);
+      }
       return null;
     }
 
