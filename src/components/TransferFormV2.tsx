@@ -76,7 +76,7 @@ export function TransferFormV2() {
     try {
       let allResults: any = null
       let batchOffset = 0
-      const batchSize = 3  // Reduced from 5 to 3 for more conservative timeout handling
+      const batchSize = 1  // Ultra-conservative: 1 track per batch to stay under 10s limit
       let isComplete = false
       let totalTracks = 0
       let processedTracks = 0

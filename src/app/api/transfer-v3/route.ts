@@ -75,20 +75,9 @@ async function searchAppleMusic(track: SpotifyTrack): Promise<{ matches: AppleTr
         console.log(`  ❌ Album "${track.album.name}" NOT FOUND in artist's discography`);
         albumNotFound = true;
         
-        // Validate with external sources
-        console.log(`  🔍 Checking external databases...`);
-        const externalValidation = await validateAlbumExistence(
-          track.artists[0].name,
-          track.album.name
-        );
-        
-        if (externalValidation.exists) {
-          console.log(`  ✓ Album confirmed to exist by: ${externalValidation.sources.map(s => s.source).join(', ')}`);
-          console.log(`    Confidence: ${externalValidation.confidence}%`);
-          if (externalValidation.sources[0]?.releaseYear) {
-            console.log(`    Release year: ${externalValidation.sources[0].releaseYear}`);
-          }
-        }
+        // External validation disabled to prevent timeouts
+        // TODO: Re-enable when we have faster timeout handling
+        console.log(`  ⏭️  Skipping external database validation to prevent timeouts`)
       }
     }
     
