@@ -46,8 +46,8 @@ export async function GET(request: NextRequest) {
 
     spotifyApi.setAccessToken(session.accessToken);
 
-    // Get the problem playlist
-    const playlistId = "6lf0FyFnEoN7THbDebLJ8R";
+    // Get the test playlist
+    const playlistId = "6ZqKAo7ECLlFSwOX278S8V";
     const playlist = await spotifyApi.getPlaylist(playlistId);
     
     const debugResults = [];

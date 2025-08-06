@@ -45,7 +45,7 @@ export function TransferForm({
     
     try {
       const playlistId = playlistUrl.split("/playlist/")[1].split("?")[0];
-      const response = await fetch("/api/transfer", {
+      const response = await fetch("/api/transfer-v3", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -55,7 +55,15 @@ export function TransferForm({
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          console.error("Failed to parse error response:", e);
+          console.error("Response status:", response.status);
+          console.error("Response status text:", response.statusText);
+          throw new Error(`Transfer failed with status ${response.status}`);
+        }
         console.error("Transfer failed:", errorData);
         throw new Error(errorData.error || "Transfer failed");
       }

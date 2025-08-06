@@ -10,7 +10,13 @@
       "WebFetch(domain:authjs.dev)",
       "Bash(pip3 install:*)",
       "Bash(ls:*)",
-      "Bash(cp:*)"
+      "Bash(cp:*)",
+      "WebFetch(domain:performance-partners.apple.com)",
+      "Bash(find:*)",
+      "WebFetch(domain:developer.apple.com)",
+      "WebFetch(domain:js-cdn.music.apple.com)",
+      "Bash(pnpm dlx:*)",
+      "WebFetch(domain:developer.spotify.com)"
     ],
     "deny": []
   }

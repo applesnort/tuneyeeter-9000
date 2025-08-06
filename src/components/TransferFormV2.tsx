@@ -1,0 +1,244 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { useSession, signIn } from "next-auth/react"
+import { useRouter } from "next/navigation"
+import { 
+  ArrowRight, 
+  Music, 
+  AlertCircle, 
+  CheckCircle2,
+  Loader2,
+  Sparkles
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import toast from "react-hot-toast"
+
+export function TransferFormV2() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
+  const [playlistUrl, setPlaylistUrl] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [stats, setStats] = useState<{
+    totalTransfers: number
+    successRate: number
+  } | null>(null)
+
+  // Load stats from localStorage
+  useEffect(() => {
+    const savedStats = localStorage.getItem("transferStats")
+    if (savedStats) {
+      setStats(JSON.parse(savedStats))
+    }
+  }, [])
+
+  const extractPlaylistId = (url: string): string | null => {
+    const match = url.match(/playlist\/([a-zA-Z0-9]+)/)
+    return match ? match[1] : null
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!session) {
+      toast.error("Please sign in to continue")
+      return
+    }
+
+    const playlistId = extractPlaylistId(playlistUrl)
+    if (!playlistId) {
+      toast.error("Please enter a valid Spotify playlist URL")
+      return
+    }
+
+    setIsLoading(true)
+
+    try {
+      const response = await fetch("/api/transfer-v3", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.accessToken}`,
+        },
+        body: JSON.stringify({ playlistId }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Transfer failed")
+      }
+
+      const result = await response.json()
+      
+      // Save result to localStorage for review page
+      localStorage.setItem("latestTransferResult", JSON.stringify(result))
+      
+      // Update stats
+      const newStats = {
+        totalTransfers: (stats?.totalTransfers || 0) + 1,
+        successRate: Math.round((result.successfulTransfers / result.totalTracks) * 100)
+      }
+      setStats(newStats)
+      localStorage.setItem("transferStats", JSON.stringify(newStats))
+      
+      // Navigate to review page
+      router.push("/transfer-review")
+    } catch (error) {
+      console.error("Transfer error:", error)
+      toast.error(error instanceof Error ? error.message : "Transfer failed")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  if (status === "loading") {
+    return (
+      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-[calc(100vh-4rem)]">
+      <div className="container mx-auto px-4 py-8 md:py-16">
+        <div className="mx-auto max-w-2xl">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium bg-primary/10 text-primary mb-4">
+              <Sparkles className="h-4 w-4" />
+              Advanced Track Matching Algorithm
+            </div>
+            <h1 className="text-4xl font-bold tracking-tight sm:text-5xl mb-4">
+              TuneYeeter 9000
+            </h1>
+            <p className="text-lg text-muted-foreground">
+              Move your Spotify playlists to Apple Music with industry-leading accuracy
+            </p>
+          </div>
+
+          {stats && (
+            <div className="grid grid-cols-2 gap-4 mb-8">
+              <Card className="border-muted">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Transfers</p>
+                      <p className="text-3xl font-bold">{stats.totalTransfers}</p>
+                    </div>
+                    <Music className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-muted">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Success Rate</p>
+                      <p className="text-3xl font-bold">{stats.successRate}%</p>
+                    </div>
+                    <CheckCircle2 className="h-8 w-8 text-green-500" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {!session ? (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <Music className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <h2 className="text-2xl font-semibold mb-2">Get Started</h2>
+                <p className="text-muted-foreground mb-6">
+                  Sign in with Spotify to begin transferring your playlists
+                </p>
+                <Button
+                  onClick={() => signIn("spotify")}
+                  className="w-full sm:w-auto"
+                  size="lg"
+                >
+                  Sign in with Spotify
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="p-8">
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div>
+                    <label htmlFor="playlist" className="block text-sm font-medium mb-2">
+                      Spotify Playlist URL
+                    </label>
+                    <input
+                      type="url"
+                      id="playlist"
+                      value={playlistUrl}
+                      onChange={(e) => setPlaylistUrl(e.target.value)}
+                      placeholder="https://open.spotify.com/playlist/..."
+                      className="w-full rounded-lg border border-input bg-background px-4 py-3 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      required
+                      disabled={isLoading}
+                    />
+                  </div>
+
+                  <div className="bg-muted/50 rounded-lg p-4">
+                    <div className="flex gap-3">
+                      <AlertCircle className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                      <div className="space-y-1 text-sm">
+                        <p className="font-medium">What to expect:</p>
+                        <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                          <li>Automatic matching for 99% of tracks using ISRC codes</li>
+                          <li>Smart fallback for tracks without ISRCs</li>
+                          <li>Manual review for uncertain matches</li>
+                          <li>Detailed report of any unmatched tracks</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full"
+                    size="lg"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Analyzing playlist...
+                      </>
+                    ) : (
+                      <>
+                        Start Transfer
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </>
+                    )}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="mt-8 text-center">
+            <div className="inline-flex items-center gap-4 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                <span>No data stored</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                <span>Privacy focused</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                <span>Open source</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

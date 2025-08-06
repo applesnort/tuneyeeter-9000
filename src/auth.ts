@@ -1,45 +1,36 @@
-import NextAuth from "next-auth";
-import Spotify from "next-auth/providers/spotify";
+import NextAuth from "next-auth"
+import SpotifyProvider from "next-auth/providers/spotify"
 
-const scopes = ["playlist-read-private", "playlist-read-collaborative"].join(" ");
+const scopes = "playlist-read-private playlist-read-collaborative"
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+export default NextAuth({
   providers: [
-    Spotify({
-      clientId: process.env.SPOTIFY_CLIENT_ID!,
-      clientSecret: process.env.SPOTIFY_CLIENT_SECRET!,
-      authorization: {
-        params: {
-          scope: scopes,
-          show_dialog: true,
-        },
-      },
+    SpotifyProvider({
+      clientId: process.env.AUTH_SPOTIFY_ID!,
+      clientSecret: process.env.AUTH_SPOTIFY_SECRET!,
+      authorization: `https://accounts.spotify.com/authorize?scope=${scopes}`,
     }),
   ],
   callbacks: {
-    async jwt({ token, account, user }) {
-      // Initial sign in
-      if (account && user) {
-        return {
-          ...token,
-          accessToken: account.access_token,
-          refreshToken: account.refresh_token,
-          accessTokenExpires: account.expires_at ? account.expires_at * 1000 : 0,
-        };
+    async jwt({ token, account }) {
+      if (account) {
+        token.accessToken = account.access_token
+        token.refreshToken = account.refresh_token
+        token.expiresAt = account.expires_at
       }
-
-      // Return previous token if the access token has not expired yet
-      if (Date.now() < (token.accessTokenExpires as number)) {
-        return token;
-      }
-
-      // Access token has expired, try to update it
-      return token;
+      return token
     },
     async session({ session, token }) {
-      session.accessToken = token.accessToken as string;
-      session.error = token.error as string | undefined;
-      return session;
+      session.accessToken = token.accessToken as string
+      return session
     },
   },
-});
+})
+
+// For Next.js 13+ app directory
+export const { handlers, signIn, signOut, auth } = {
+  handlers: { GET: NextAuth, POST: NextAuth },
+  signIn: async () => { throw new Error("Use NextAuth API routes") },
+  signOut: async () => { throw new Error("Use NextAuth API routes") },
+  auth: async () => null,
+}

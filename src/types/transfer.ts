@@ -1,5 +1,5 @@
 export interface SpotifyTrack {
-  id: string;
+  id?: string; // Made optional - some tracks (e.g., local files) might not have IDs
   name: string;
   artists: Array<{
     name: string;
@@ -17,7 +17,7 @@ export interface SpotifyTrack {
   external_ids?: {
     isrc?: string;
   };
-  uri: string;
+  uri?: string; // Also made optional as it might be missing too
 }
 
 export interface AppleTrack {
@@ -29,15 +29,21 @@ export interface AppleTrack {
   durationMillis: number | string; // Can be either from API
   artworkUrl?: string;
   releaseDate?: string;
-  // Note: iTunes API does NOT provide ISRC codes
+  isrc?: string; // Available from MusicKit API, not iTunes API
 }
 
 export interface TransferFailure {
   spotifyTrack: SpotifyTrack;
-  reason: 'not_found' | 'region_locked' | 'multiple_matches' | 'api_error';
+  reason: 'not_found' | 'region_locked' | 'multiple_matches' | 'api_error' | 'album_not_available';
   details: string;
   suggestedAction: string;
   possibleMatches?: AppleTrack[];
+  unavailableConfidence?: number; // 0-100 confidence that track is not available
+  closestMatches?: Array<{
+    track: AppleTrack;
+    similarity: number; // 0-100 how similar this match is
+    differences: string[]; // What's different (e.g., "Different artist", "Live version")
+  }>;
 }
 
 export interface SuccessfulTransfer {
@@ -54,4 +60,21 @@ export interface TransferResult {
   transferDate: string;
   spotifyPlaylistUrl: string;
   applePlaylistUrl?: string;
+  timing?: {
+    overallTime: number;
+    totalApiCalls: number;
+    totalSearchTime: number;
+    averageTimePerTrack: number;
+    averageApiCallsPerTrack: number;
+    trackTimings: Array<{
+      trackName: string;
+      searchTime: number;
+      apiCalls: number;
+      matchResult: string;
+    }>;
+  };
+  metadata?: {
+    isrcMatchCount?: number;
+    usedMusicKit?: boolean;
+  };
 }

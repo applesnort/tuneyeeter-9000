@@ -13,7 +13,22 @@ const spotifyApi = new SpotifyWebApi({
   clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
 });
 
-async function searchAppleMusic(track: SpotifyTrack): Promise<AppleTrack[]> {
+async function searchAppleMusic(track: SpotifyTrack): Promise<{
+  matches: AppleTrack[];
+  timing: {
+    duration_ms: number;
+    apiCalls: number;
+    searchDetails: Array<{
+      query: string;
+      duration: number;
+      resultCount: number;
+      status: number;
+    }>;
+  };
+}> {
+  const startTime = Date.now();
+  const searchDetails: Array<{ query: string; duration: number; resultCount: number; status: number; }> = [];
+  
   console.log('\n' + '='.repeat(80));
   console.log(`SEARCHING FOR: "${track.name}" by ${track.artists.map(a => a.name).join(", ")}`);
   console.log(`Album: "${track.album.name}"`);
@@ -26,87 +41,204 @@ async function searchAppleMusic(track: SpotifyTrack): Promise<AppleTrack[]> {
       return [];
     }
 
-    // Build search query - try multiple variations
+    // Normalize strings for search - handle Unicode normalization and Apple-specific differences
+    const normalizeForSearch = (str: string) => {
+      return str
+        // First apply Unicode NFC normalization (Canonical Composition) - Apple's preferred form
+        .normalize('NFC')
+        // Handle common character substitutions between Spotify/Apple metadata
+        .replace(/&/g, 'and')  // & → and
+        .replace(/['']/g, "'") // Smart quotes → regular quotes  
+        .replace(/[""]/g, '"') // Smart quotes → regular quotes
+        .replace(/[–—]/g, '-') // Em/en dash → hyphen
+        // Normalize whitespace
+        .replace(/\s+/g, ' ')
+        .trim();
+    };
+
+    const normalizedTrackName = normalizeForSearch(track.name);
+    const normalizedAlbumName = normalizeForSearch(track.album.name);
+    const normalizedArtistName = normalizeForSearch(track.artists[0].name);
+
+    // Build search query - prioritize artist disambiguation
     const searchQueries = [
-      // Try exact match first
-      `${track.name} ${track.artists.map(a => a.name).join(" ")}`,
-      // Try with album
-      `${track.name} ${track.artists[0].name} ${track.album.name}`,
-      // Try just track and primary artist
-      `${track.name} ${track.artists[0].name}`,
+      // Force exact artist + track matching with quotes
+      `"${normalizedArtistName}" "${normalizedTrackName}"`,
+      // Exact artist name only (let iTunes find all their tracks)
+      `"${normalizedArtistName}"`,
+      // Track title in quotes + artist (prevents album name confusion)
+      `"${normalizedTrackName}" ${normalizedArtistName}`,
       // Try without parentheses content (for remixes)
       (() => {
-        const cleanName = track.name.replace(/\s*\(.*?\)\s*/g, '').trim();
-        return cleanName !== track.name ? `${cleanName} ${track.artists[0].name}` : null;
+        const cleanName = normalizedTrackName.replace(/\s*\(.*?\)\s*/g, '').trim();
+        return cleanName !== normalizedTrackName && cleanName.length > 2 ? 
+          `"${normalizedArtistName}" "${cleanName}"` : null;
       })(),
-      // Try just artist name + exact track name in quotes
-      `"${track.name}" ${track.artists[0].name}`,
+      // Last resort: artist + track without quotes (current method)
+      `${normalizedArtistName} ${normalizedTrackName}`,
     ].filter(q => q !== null) as string[];
 
-    const allMatches: AppleTrack[] = [];
+    // Use sequential searches with rate limiting to avoid 403 errors
+    console.log(`\nRunning ${searchQueries.length} searches with rate limiting...`);
     
-    for (const searchQuery of searchQueries) {
-      const searchUrl = `${process.env.ITUNES_API_URL}?term=${encodeURIComponent(searchQuery)}&entity=song&limit=50`;
+    const allMatches: AppleTrack[] = [];
+    const seenTrackIds = new Set<string>();
+    
+    for (let i = 0; i < searchQueries.length; i++) {
+      const searchQuery = searchQueries[i];
+      const searchUrl = `${process.env.ITUNES_API_URL}?term=${encodeURIComponent(searchQuery)}&country=US&entity=song&limit=25`;
       
-      console.log(`\nTrying search #${searchQueries.indexOf(searchQuery) + 1}: "${searchQuery}"`);
+      console.log(`\nSearch ${i + 1}/${searchQueries.length}: "${searchQuery}"`);
       
+      const searchStart = Date.now();
       try {
-        const response = await fetch(searchUrl);
+        const response = await fetch(searchUrl, {
+          headers: {
+            'User-Agent': 'Music-Transfer-App/1.0',
+          },
+        });
+        
+        const searchDuration = Date.now() - searchStart;
+        
         if (!response.ok) {
-          console.log(`  ❌ Search failed with status ${response.status}`);
-          continue;
-        }
-        
-        const data = await response.json();
-        console.log(`  ✓ Found ${data.resultCount} results`);
-        
-        if (data.results && data.results.length > 0) {
-          const matches = data.results.map((r: any) => ({
-            id: r.trackId?.toString() || '',
-            name: r.trackName || '',
-            artistName: r.artistName || '',
-            albumName: r.collectionName || '',
-            url: r.trackViewUrl || '',
-            durationMillis: r.trackTimeMillis || 0,
-            artworkUrl: r.artworkUrl100?.replace('100x100', '600x600') || r.artworkUrl100 || r.artworkUrl60,
-            releaseDate: r.releaseDate || r.collectionReleaseDate || '',
-          }));
-          
-          // Log first few results
-          console.log('  Top results:');
-          matches.slice(0, 3).forEach((m, idx) => {
-            const durationDiff = Math.abs(m.durationMillis - track.duration_ms);
-            console.log(`    ${idx + 1}. "${m.name}" by ${m.artistName}`);
-            console.log(`       Album: ${m.albumName}`);
-            console.log(`       Duration: ${Math.floor(m.durationMillis/1000)}s (diff: ${Math.floor(durationDiff/1000)}s)`);
+          console.log(`  ❌ Failed with status ${response.status}`);
+          searchDetails.push({
+            query: searchQuery,
+            duration: searchDuration,
+            resultCount: 0,
+            status: response.status
           });
           
-          // Add unique matches only
-          let addedCount = 0;
-          for (const match of matches) {
-            if (!allMatches.some(m => m.id === match.id)) {
-              allMatches.push(match);
-              addedCount++;
-            }
+          if (response.status === 403) {
+            console.log(`  Rate limited - waiting longer before next request`);
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds on 403
+            continue;
           }
-          console.log(`  Added ${addedCount} new unique matches (total: ${allMatches.length})`);
+        } else {
+          const data = await response.json();
+          console.log(`  ✓ Found ${data.resultCount || 0} results`);
+          
+          searchDetails.push({
+            query: searchQuery,
+            duration: searchDuration,
+            resultCount: data.resultCount || 0,
+            status: response.status
+          });
+          
+          if (data.results && data.results.length > 0) {
+            const matches = data.results.map((r: any) => ({
+              id: r.trackId?.toString() || '',
+              name: r.trackName || '',
+              artistName: r.artistName || '',
+              albumName: r.collectionName || '',
+              url: r.trackViewUrl || '',
+              durationMillis: r.trackTimeMillis || 0,
+              artworkUrl: r.artworkUrl100?.replace('100x100', '600x600') || r.artworkUrl100 || r.artworkUrl60,
+              releaseDate: r.releaseDate || r.collectionReleaseDate || '',
+            }));
+            
+            // Log first few results
+            console.log('  Top results:');
+            matches.slice(0, 3).forEach((m, idx) => {
+              const durationDiff = Math.abs(m.durationMillis - track.duration_ms);
+              console.log(`    ${idx + 1}. "${m.name}" by ${m.artistName}`);
+              console.log(`       Album: ${m.albumName}`);
+              console.log(`       Duration: ${Math.floor(m.durationMillis/1000)}s (diff: ${Math.floor(durationDiff/1000)}s)`);
+            });
+            
+            // Add unique matches only
+            let addedCount = 0;
+            for (const match of matches) {
+              if (!seenTrackIds.has(match.id)) {
+                seenTrackIds.add(match.id);
+                allMatches.push(match);
+                addedCount++;
+              }
+            }
+            console.log(`  Added ${addedCount} new unique matches (total: ${allMatches.length})`);
+          }
         }
       } catch (error) {
-        console.error("  ❌ Search error:", error);
+        console.error(`  ❌ Search error:`, error);
+        searchDetails.push({
+          query: searchQuery,
+          duration: Date.now() - searchStart,
+          resultCount: 0,
+          status: 0
+        });
+      }
+      
+      // Rate limiting to stay under Apple's 20 calls per minute limit
+      if (i < searchQueries.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 3000)); // 3 seconds between requests (20 calls/min)
+      }
+      
+      // Early termination optimization: check if we already have a perfect match
+      if (allMatches.length > 0) {
+        // Quick check for perfect matches using fuzzy matching to handle character variations
+        const perfectMatch = allMatches.find(match => {
+          // Use our existing normalization logic for better matching
+          const normalizedAppleTitle = normalizeForSearch(match.name);
+          const normalizedSpotifyTitle = normalizeForSearch(track.name);
+          const titleMatch = normalizedAppleTitle === normalizedSpotifyTitle;
+          
+          const normalizedAppleArtist = normalizeForSearch(match.artistName);
+          const artistMatch = normalizedAppleArtist === normalizedArtistName;
+          
+          const durationDiff = Math.abs(parseInt(match.durationMillis?.toString() || '0') - track.duration_ms);
+          const durationMatch = durationDiff < 2000; // Within 2 seconds
+          
+          return titleMatch && artistMatch && durationMatch;
+        });
+        
+        if (perfectMatch) {
+          console.log(`  Early termination - found perfect match: "${perfectMatch.name}" by ${perfectMatch.artistName}`);
+          break;
+        }
+        
+        // Also check for very high confidence matches (exact title + duration, any artist)
+        const highConfidenceMatch = allMatches.find(match => {
+          const titleMatch = match.name.toLowerCase().trim() === normalizedTrackName.toLowerCase().trim();
+          const durationDiff = Math.abs(parseInt(match.durationMillis?.toString() || '0') - track.duration_ms);
+          const durationMatch = durationDiff < 2000; // Within 2 seconds
+          
+          return titleMatch && durationMatch;
+        });
+        
+        if (highConfidenceMatch && i > 0) { // Only after first search to get some options
+          console.log(`  Early termination - found high confidence match: "${highConfidenceMatch.name}"`);
+          break;
+        }
       }
       
       // Stop if we have enough good matches
-      if (allMatches.length >= 20) {
+      if (allMatches.length >= 15) {
         console.log(`  Stopping search - have ${allMatches.length} matches`);
         break;
       }
     }
     
-    console.log(`\nFINAL: Found ${allMatches.length} total unique matches`);
-    return allMatches;
+    const totalTime = Date.now() - startTime;
+    console.log(`\nFINAL: Found ${allMatches.length} total unique matches in ${totalTime}ms`);
+    
+    return {
+      matches: allMatches,
+      timing: {
+        duration_ms: totalTime,
+        apiCalls: searchDetails.length,
+        searchDetails
+      }
+    };
   } catch (error) {
     console.error("Apple Music search error:", error);
-    return [];
+    return {
+      matches: [],
+      timing: {
+        duration_ms: Date.now() - startTime,
+        apiCalls: 0,
+        searchDetails: []
+      }
+    };
   }
 }
 
@@ -142,20 +274,59 @@ export async function POST(request: NextRequest) {
         limit,
       });
       
+      // Debug unavailable tracks (tracks without IDs)
+      const unavailableTracks = response.body.items.filter(item => item.track && item.track.type === "track" && !item.track.id);
+      if (unavailableTracks.length > 0) {
+        console.log(`Found ${unavailableTracks.length} unavailable tracks (missing Spotify IDs):`);
+        unavailableTracks.forEach((item, idx) => {
+          console.log(`  ${idx + 1}. "${item.track?.name || 'Unknown'}" by ${item.track?.artists?.[0]?.name || 'Unknown'}`);
+        });
+        console.log(`These tracks will still be searched on Apple Music.`);
+      }
+      
+      // Only skip items that have no track data at all
+      const invalidItems = response.body.items.filter(item => !item.track || item.track.type !== "track");
+      if (invalidItems.length > 0) {
+        console.log(`Skipping ${invalidItems.length} invalid items (not tracks)`);
+      }
+      
       const validTracks = response.body.items
         .filter(item => item.track && item.track.type === "track")
         .map(item => item.track as SpotifyApi.TrackObjectFull);
+      
+      // Debug: Check if tracks have IDs
+      if (validTracks.length > 0) {
+        console.log(`Sample track ID: ${validTracks[0].id}, name: ${validTracks[0].name}`);
+      }
+      
+      // Check for tracks without IDs
+      const tracksWithoutIds = validTracks.filter(track => !track.id);
+      if (tracksWithoutIds.length > 0) {
+        console.warn(`WARNING: Found ${tracksWithoutIds.length} tracks without IDs:`);
+        tracksWithoutIds.forEach(track => {
+          console.log(`  - "${track.name}" by ${track.artists?.[0]?.name || 'Unknown'}, URI: ${track.uri}`);
+        });
+      }
       
       tracks.push(...validTracks);
       offset += limit;
     }
 
-    // Process transfers
+    // Process transfers with timing
     const failures: TransferFailure[] = [];
     const successful: SuccessfulTransfer[] = [];
+    const trackTimings: Array<{
+      trackName: string;
+      searchTime: number;
+      apiCalls: number;
+      matchResult: string;
+    }> = [];
+    
+    const overallStartTime = Date.now();
 
     for (const track of tracks) {
-      const appleMatches = await searchAppleMusic(track);
+      const searchResult = await searchAppleMusic(track);
+      const appleMatches = searchResult.matches;
       
       // Use the research-based matching algorithm
       const matchResult = matchTracks(track, appleMatches);
@@ -172,6 +343,14 @@ export async function POST(request: NextRequest) {
         });
       }
       
+      // Record timing data
+      trackTimings.push({
+        trackName: track.name,
+        searchTime: searchResult.timing.duration_ms,
+        apiCalls: searchResult.timing.apiCalls,
+        matchResult: matchResult.bestMatch ? 'SUCCESS' : 'FAILED'
+      });
+
       if (matchResult.bestMatch && matchResult.confidence !== 'none') {
         // Successful match
         successful.push({
@@ -197,9 +376,12 @@ export async function POST(request: NextRequest) {
         failures.push(failure);
       }
       
-      // Rate limiting
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Rate limiting between tracks - no additional delay needed since search queries already have 3s delays
     }
+
+    const overallTime = Date.now() - overallStartTime;
+    const totalApiCalls = trackTimings.reduce((sum, t) => sum + t.apiCalls, 0);
+    const totalSearchTime = trackTimings.reduce((sum, t) => sum + t.searchTime, 0);
 
     const result: TransferResult = {
       playlistName: playlist.body.name,
@@ -209,7 +391,31 @@ export async function POST(request: NextRequest) {
       failures,
       transferDate: new Date().toISOString(),
       spotifyPlaylistUrl: playlist.body.external_urls.spotify,
+      timing: {
+        overallTime,
+        totalApiCalls,
+        totalSearchTime,
+        averageTimePerTrack: Math.round(overallTime / tracks.length),
+        averageApiCallsPerTrack: Math.round(totalApiCalls / tracks.length * 10) / 10,
+        trackTimings
+      }
     };
+
+    // Save detailed results to JSON file for analysis
+    const fs = require('fs');
+    const detailedResults = {
+      ...result,
+      timestamp: new Date().toISOString(),
+      playlistId: playlistId,
+      searchDetails: trackTimings
+    };
+    
+    try {
+      fs.writeFileSync(`./transfer-results-${Date.now()}.json`, JSON.stringify(detailedResults, null, 2));
+      console.log('Detailed results saved to JSON file');
+    } catch (error) {
+      console.error('Failed to save results to file:', error);
+    }
 
     return NextResponse.json(result);
   } catch (error) {
