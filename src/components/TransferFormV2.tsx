@@ -178,32 +178,6 @@ export function TransferFormV2() {
             </p>
           </div>
 
-          {stats && (
-            <div className="grid grid-cols-2 gap-4 mb-8">
-              <Card className="border-muted">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Transfers</p>
-                      <p className="text-3xl font-bold">{stats.totalTransfers}</p>
-                    </div>
-                    <Music className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="border-muted">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Success Rate</p>
-                      <p className="text-3xl font-bold">{stats.successRate}%</p>
-                    </div>
-                    <CheckCircle2 className="h-8 w-8 text-green-500" />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
 
           {!session ? (
             <Card>
@@ -243,20 +217,6 @@ export function TransferFormV2() {
                     />
                   </div>
 
-                  <div className="bg-muted/50 rounded-lg p-4">
-                    <div className="flex gap-3">
-                      <AlertCircle className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
-                      <div className="space-y-1 text-sm">
-                        <p className="font-medium">What to expect:</p>
-                        <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                          <li>Automatic matching for 99% of tracks using ISRC codes</li>
-                          <li>Smart fallback for tracks without ISRCs</li>
-                          <li>Manual review for uncertain matches</li>
-                          <li>Detailed report of any unmatched tracks</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
 
                   {batchProgress && (
                     <div className="bg-muted/50 rounded-lg p-4 mb-4">

@@ -72,14 +72,23 @@ export function Navigation() {
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-80">
-                <div className="space-y-2">
-                  <h4 className="font-medium leading-none">How to use this tool</h4>
-                  <p className="text-sm text-muted-foreground">
-                    1. Create a test playlist on Spotify with various songs<br/>
-                    2. Include popular songs, indie tracks, and regional music<br/>
-                    3. Use the tool to see which songs transfer successfully<br/>
-                    4. Review the detailed report for any failures
-                  </p>
+                <div className="space-y-3">
+                  <h4 className="font-medium leading-none">What to expect:</h4>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                    <li>Automatic matching for 99% of tracks using ISRC codes</li>
+                    <li>Smart fallback for tracks without ISRCs</li>
+                    <li>Manual review for uncertain matches</li>
+                    <li>Detailed report of any unmatched tracks</li>
+                  </ul>
+                  <div className="pt-2 border-t">
+                    <h4 className="font-medium leading-none mb-2">How to use:</h4>
+                    <p className="text-sm text-muted-foreground">
+                      1. Sign in with Spotify<br/>
+                      2. Paste your playlist URL<br/>
+                      3. Review any unmatched tracks<br/>
+                      4. Import to Apple Music
+                    </p>
+                  </div>
                 </div>
               </PopoverContent>
             </Popover>

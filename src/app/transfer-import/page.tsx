@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { TransferResult } from "@/types/transfer"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Loader2, Music, CheckCircle2, AlertCircle, Apple } from "lucide-react"
+import { Loader2, Music, CheckCircle2, AlertCircle, Apple, ExternalLink } from "lucide-react"
 import toast from "react-hot-toast"
 
 declare global {
@@ -198,9 +198,12 @@ export default function TransferImportPage() {
   }
 
   const totalTracksToImport = transferResult.successfulTransfers + Object.keys(selectedMatches).length
-  const failedTracks = transferResult.failures.filter(f => 
-    !f.spotifyTrack.id || !selectedMatches[f.spotifyTrack.id]
-  ).length
+  const failedTracks = transferResult.failures.filter(f => {
+    // If track has no ID, it can't be matched
+    if (!f.spotifyTrack.id) return true
+    // If it's not in selectedMatches, it failed
+    return !selectedMatches[f.spotifyTrack.id]
+  }).length
 
   return (
     <div className="min-h-[calc(100vh-4rem)]">
@@ -282,57 +285,116 @@ export default function TransferImportPage() {
                 </div>
               )}
 
-              {/* Success */}
+              {/* Success Summary */}
               {playlistUrl && (
-                <div className="border rounded-lg p-4 bg-green-500/10 dark:bg-green-500/20">
-                  <div className="flex items-start gap-3">
-                    <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5" />
-                    <div className="space-y-2 flex-1">
-                      <p className="font-medium">Playlist Created Successfully!</p>
-                      <p className="text-sm text-muted-foreground">
-                        {totalTracksToImport} tracks have been added to your Apple Music library.
-                      </p>
-                      <div className="mt-3 space-y-2">
-                        <p className="text-sm font-medium">Your playlist is ready!</p>
-                        <div className="text-sm text-muted-foreground space-y-2">
-                          <p>The playlist "{playlistName || transferResult.playlistName}" has been created in your Apple Music library.</p>
-                          <p className="font-medium mt-2">If the buttons below don't work:</p>
-                          <ol className="list-decimal list-inside space-y-1 ml-2">
-                            <li>Open the Music app manually</li>
-                            <li>Go to Library → Playlists</li>
-                            <li>Look for "{playlistName || transferResult.playlistName}"</li>
-                            <li>It may take a moment to appear</li>
-                          </ol>
-                        </div>
+                <div className="space-y-4">
+                  {/* Header */}
+                  <div className="border rounded-lg p-4 bg-green-500/10 dark:bg-green-500/20">
+                    <div className="flex items-center gap-3 mb-3">
+                      <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                      <h3 className="font-semibold text-green-800 dark:text-green-200">
+                        Playlist "{playlistName || transferResult.playlistName}" Created Successfully!
+                      </h3>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                      <div>
+                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">{totalTracksToImport}</div>
+                        <div className="text-xs text-muted-foreground">Imported</div>
                       </div>
-                      <div className="mt-3 space-y-2">
-                        <Button
-                          onClick={() => {
-                            console.log("Opening playlist with URL:", playlistUrl);
-                            console.log("Playlist ID:", playlistId);
-                            // Try to open in Music app
-                            window.location.href = playlistUrl;
-                            // Show a message after a short delay
-                            setTimeout(() => {
-                              toast("If the Music app didn't open, try the web link below or check your Library → Playlists");
-                            }, 2000);
-                          }}
-                          className="w-full"
-                        >
-                          <Apple className="mr-2 h-4 w-4" />
-                          Open in Apple Music App
-                        </Button>
-                        {webUrl && (
-                          <Button
-                            onClick={() => window.open(webUrl, '_blank')}
-                            variant="outline"
-                            className="w-full"
-                          >
-                            Open in Web Browser
-                          </Button>
-                        )}
+                      <div>
+                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{Object.keys(selectedMatches).length}</div>
+                        <div className="text-xs text-muted-foreground">Manual Picks</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-red-600 dark:text-red-400">{failedTracks}</div>
+                        <div className="text-xs text-muted-foreground">Skipped</div>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Track Visual Summary */}
+                  <div className="border rounded-lg p-4">
+                    <h4 className="font-medium mb-3">Track Summary</h4>
+                    <div className="space-y-3">
+                      {/* Successful transfers */}
+                      {transferResult.successful.slice(0, 3).map((transfer, idx) => (
+                        <div key={idx} className="flex items-center gap-3 text-sm">
+                          {transfer.appleTrack.artworkUrl && (
+                            <img 
+                              src={transfer.appleTrack.artworkUrl} 
+                              alt="" 
+                              className="w-8 h-8 rounded object-cover"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">{transfer.spotifyTrack.name}</p>
+                            <p className="text-muted-foreground truncate">{transfer.spotifyTrack.artists[0].name}</p>
+                          </div>
+                          <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+                        </div>
+                      ))}
+                      
+                      {/* Manual selections */}
+                      {Object.entries(selectedMatches).slice(0, 2).map(([spotifyId, appleId]) => {
+                        const failure = transferResult.failures.find(f => f.spotifyTrack.id === spotifyId)
+                        const selectedTrack = failure?.possibleMatches?.find(m => m.id === appleId)
+                        if (!failure || !selectedTrack) return null
+                        
+                        return (
+                          <div key={spotifyId} className="flex items-center gap-3 text-sm">
+                            {selectedTrack.artworkUrl && (
+                              <img 
+                                src={selectedTrack.artworkUrl} 
+                                alt="" 
+                                className="w-8 h-8 rounded object-cover"
+                              />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">{failure.spotifyTrack.name}</p>
+                              <p className="text-muted-foreground truncate">{failure.spotifyTrack.artists[0].name}</p>
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <span className="text-xs text-blue-600 dark:text-blue-400">Manual</span>
+                              <CheckCircle2 className="w-4 h-4 text-blue-500" />
+                            </div>
+                          </div>
+                        )
+                      })}
+                      
+                      {/* Show more indicator */}
+                      {(transferResult.successful.length + Object.keys(selectedMatches).length) > 5 && (
+                        <div className="text-center py-2 text-sm text-muted-foreground">
+                          + {totalTracksToImport - 5} more tracks imported
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="space-y-2">
+                    <Button
+                      onClick={() => {
+                        console.log("Opening playlist with URL:", playlistUrl);
+                        window.location.href = playlistUrl;
+                        setTimeout(() => {
+                          toast("If the Music app didn't open, try the web link below or check Library → Playlists");
+                        }, 2000);
+                      }}
+                      className="w-full"
+                    >
+                      <Apple className="mr-2 h-4 w-4" />
+                      Open in Apple Music App
+                    </Button>
+                    {webUrl && (
+                      <Button
+                        onClick={() => window.open(webUrl, '_blank')}
+                        variant="outline"
+                        className="w-full"
+                      >
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        Open in Web Browser
+                      </Button>
+                    )}
                   </div>
                 </div>
               )}
